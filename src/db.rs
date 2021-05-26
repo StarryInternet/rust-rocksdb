@@ -452,7 +452,7 @@ impl DBIterator {
         mode: IteratorMode,
     ) -> Result<DBIterator, Error> {
         let mut rv = DBIterator {
-            raw: try!(DBRawIterator::new_cf(db, cf_handle, readopts)),
+            raw: DBRawIterator::new_cf(db, cf_handle, readopts)?,
             direction: Direction::Forward, // blown away by set_mode()
             just_seeked: false,
         };
