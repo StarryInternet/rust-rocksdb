@@ -110,15 +110,11 @@ impl DBTool {
         Ok(())
     }
 
-    // FIXME FIXME FIXME this is broken because cfnames pointers become invalid when function
-    // returns
-    //
-    // Also the return type from this function is absolutely horrendous
     pub(crate) fn prepare_open_column_family_args(
         cfs: Vec<ColumnFamilyDescriptor>
     ) -> Result<(
         Vec<ColumnFamilyDescriptor>,
-        Vec<*const c_char>,
+        Vec<CString>,
         Vec<*const ffi::rocksdb_options_t>,
         Vec<*mut ffi::rocksdb_column_family_handle_t>
     ), Error> {
@@ -130,14 +126,13 @@ impl DBTool {
                 options: Options::default()
             });
         }
+
         // We need to store our CStrings in an intermediate vector
-        // so that their pointers remain valid.
-        let c_cfs = cfs_v
+        // so that their pointers remain valid when we exit this function.
+        let cstring_cfs = cfs_v
             .iter()
             .map(|cf| CString::new(cf.name.as_bytes()).map_err(Into::into))
             .collect::<Result<Vec<_>, Error>>()?;
-
-        let cfnames: Vec<_> = c_cfs.iter().map(|cf| cf.as_ptr()).collect();
 
         // These handles will be populated by DB.
         let cfhandles: Vec<_> = cfs_v.iter().map(|_| ptr::null_mut()).collect();
@@ -146,7 +141,7 @@ impl DBTool {
             .map(|cf| cf.options.inner as *const _)
             .collect();
 
-        Ok((cfs_v, cfnames, cfopts, cfhandles))
+        Ok((cfs_v, cstring_cfs, cfopts, cfhandles))
     }
 
     pub(crate) fn make_column_families(
@@ -385,15 +380,17 @@ impl DB {
 
             (db, BTreeMap::new())
         } else {
-            let (cfs_v, mut cfnames, mut cfopts, mut cfhandles) =
+            let (cfs_v, cfnames, mut cfopts, mut cfhandles) =
                 DBTool::prepare_open_column_family_args(cfs)?;
+
+            let mut cfname_ptrs = cfnames.iter().map(|cf| cf.as_ptr()).collect::<Vec<_>>();
 
             let db = unsafe {
                 try_ffi!(ffi::rocksdb_open_column_families(
                     opts.inner,
                     cpath.as_ptr(),
                     cfs_v.len() as c_int,
-                    cfnames.as_mut_ptr(),
+                    cfname_ptrs.as_mut_ptr(),
                     cfopts.as_mut_ptr(),
                     cfhandles.as_mut_ptr()
                 ))
