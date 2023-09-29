@@ -316,7 +316,7 @@ impl Default for RestoreOptions {
     fn default() -> RestoreOptions {
         let opts = unsafe { ffi::rocksdb_restore_options_create() };
         if opts.is_null() {
-            panic!("Could not create RocksDB restore options".to_owned());
+            panic!("Could not create RocksDB restore options");
         }
         RestoreOptions { inner: opts }
     }
