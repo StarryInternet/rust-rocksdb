@@ -20,7 +20,7 @@
 /// A simple wrapper round a string, used for errors reported from ffi calls.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Error {
-    message: String
+    message: String,
 }
 
 impl Error {
@@ -47,6 +47,12 @@ impl Into<String> for Error {
 //         error.message
 //     }
 // }
+
+impl From<std::ffi::NulError> for Error {
+    fn from(nul_error: std::ffi::NulError) -> Self {
+        Self::new(nul_error.to_string())
+    }
+}
 
 impl std::error::Error for Error {
     fn description(&self) -> &str {

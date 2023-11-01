@@ -110,16 +110,14 @@ impl DBTool {
         Ok(())
     }
 
-    // FIXME FIXME FIXME this is broken because cfnames pointers become invalid when function
-    // returns
     pub(crate) fn prepare_open_column_family_args(
         cfs: Vec<ColumnFamilyDescriptor>
-    ) -> (
+    ) -> Result<(
         Vec<ColumnFamilyDescriptor>,
-        Vec<*const c_char>,
+        Vec<CString>,
         Vec<*const ffi::rocksdb_options_t>,
         Vec<*mut ffi::rocksdb_column_family_handle_t>
-    ) {
+    ), Error> {
         let mut cfs_v = cfs;
         // Always open the default column family.
         if !cfs_v.iter().any(|cf| cf.name == "default") {
@@ -128,14 +126,13 @@ impl DBTool {
                 options: Options::default()
             });
         }
-        // We need to store our CStrings in an intermediate vector
-        // so that their pointers remain valid.
-        let c_cfs: Vec<CString> = cfs_v
-            .iter()
-            .map(|cf| CString::new(cf.name.as_bytes()).unwrap())
-            .collect();
 
-        let cfnames: Vec<_> = c_cfs.iter().map(|cf| cf.as_ptr()).collect();
+        // We need to store our CStrings in an intermediate vector
+        // so that their pointers remain valid when we exit this function.
+        let cstring_cfs = cfs_v
+            .iter()
+            .map(|cf| CString::new(cf.name.as_bytes()).map_err(Into::into))
+            .collect::<Result<Vec<_>, Error>>()?;
 
         // These handles will be populated by DB.
         let cfhandles: Vec<_> = cfs_v.iter().map(|_| ptr::null_mut()).collect();
@@ -144,7 +141,7 @@ impl DBTool {
             .map(|cf| cf.options.inner as *const _)
             .collect();
 
-        (cfs_v, cfnames, cfopts, cfhandles)
+        Ok((cfs_v, cstring_cfs, cfopts, cfhandles))
     }
 
     pub(crate) fn make_column_families(
@@ -383,15 +380,17 @@ impl DB {
 
             (db, BTreeMap::new())
         } else {
-            let (cfs_v, mut cfnames, mut cfopts, mut cfhandles) =
-                DBTool::prepare_open_column_family_args(cfs);
+            let (cfs_v, cfnames, mut cfopts, mut cfhandles) =
+                DBTool::prepare_open_column_family_args(cfs)?;
+
+            let mut cfname_ptrs = cfnames.iter().map(|cf| cf.as_ptr()).collect::<Vec<_>>();
 
             let db = unsafe {
                 try_ffi!(ffi::rocksdb_open_column_families(
                     opts.inner,
                     cpath.as_ptr(),
                     cfs_v.len() as c_int,
-                    cfnames.as_mut_ptr(),
+                    cfname_ptrs.as_mut_ptr(),
                     cfopts.as_mut_ptr(),
                     cfhandles.as_mut_ptr()
                 ))
@@ -430,11 +429,13 @@ impl DatabaseMetaOperations for DB {
             return Err(Error::new(format!("Column family \"{}\" already exists", cf_name)));
         }
 
+        let cf_name_cstring = CString::new(cf_name.as_bytes())?;
+
         let inner = unsafe {
             try_ffi!(ffi::rocksdb_create_column_family(
                 self.inner.inner,
                 opts.inner,
-                CString::new(cf_name.as_bytes()).unwrap().as_ptr() // FIXME no unwrap
+                cf_name_cstring.as_ptr()
             ))
         };
         let column_family = ColumnFamily { inner };
@@ -751,10 +752,10 @@ impl OptimisticTransactionDB {
             }
             // We need to store our CStrings in an intermediate vector
             // so that their pointers remain valid.
-            let c_cfs: Vec<CString> = cfs_v
+            let c_cfs = cfs_v
                 .iter()
-                .map(|cf| CString::new(cf.name.as_bytes()).unwrap())
-                .collect();
+                .map(|cf| CString::new(cf.name.as_bytes()).map_err(Into::into))
+                .collect::<Result<Vec<_>, Error>>()?;
 
             let mut cfnames: Vec<*const c_char> = c_cfs
                 .iter()
@@ -1201,11 +1202,13 @@ impl DatabaseMetaOperations for TransactionDB {
             return Err(Error::new(format!("Column family \"{}\" already exists", cf_name)));
         }
 
+        let cf_name_cstring = CString::new(cf_name.as_bytes())?;
+
         let inner = unsafe {
             try_ffi!(ffi::rocksdb_transactiondb_create_column_family(
                 self.inner.inner,
                 opts.inner,
-                CString::new(cf_name.as_bytes()).unwrap().as_ptr() // FIXME no unwrap
+                cf_name_cstring.as_ptr()
             ))
         };
         let column_family = ColumnFamily { inner };
