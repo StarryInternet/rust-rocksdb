@@ -99,6 +99,33 @@ impl BackupEngine {
         }
     }
 
+    /// Captures the state of the database in the latest backup and stores the given string in the
+    /// metadata.
+    ///
+    /// Set flush_before_backup=true to avoid losing unflushed key/value
+    /// pairs from the memtable.
+    pub fn create_new_backup_with_metadata<T: ThreadMode, D: DBInner>(
+        &mut self,
+        db: &DBCommon<T, D>,
+        metadata: String,
+        flush_before_backup: bool,
+    ) -> Result<(), Error> {
+        let c_metadata = CString::new(metadata).map_err(|err| {
+            Error::new(format!(
+                "Could not construct CString with backup metadata: {err}"
+            ))
+        })?;
+        unsafe {
+            ffi_try!(ffi::rocksdb_backup_engine_create_new_backup_with_metadata(
+                self.inner,
+                db.inner.inner(),
+                c_metadata.as_ptr(),
+                c_uchar::from(flush_before_backup),
+            ));
+            Ok(())
+        }
+    }
+
     pub fn purge_old_backups(&mut self, num_backups_to_keep: usize) -> Result<(), Error> {
         unsafe {
             ffi_try!(ffi::rocksdb_backup_engine_purge_old_backups(
