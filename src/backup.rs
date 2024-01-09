@@ -17,7 +17,7 @@ use crate::env::Env;
 use crate::{db::DBInner, ffi, ffi_util::to_cpath, DBCommon, Error, ThreadMode};
 
 use libc::c_uchar;
-use std::ffi::CString;
+use std::ffi::{CStr, CString};
 use std::path::Path;
 
 /// Represents information of a backup including timestamp of the backup
@@ -33,6 +33,8 @@ pub struct BackupEngineInfo {
     pub size: u64,
     /// Number of files related to the backup
     pub num_files: u32,
+    /// Metadata associated with the backup. Might be an empty string.
+    pub metadata: String,
 }
 
 pub struct BackupEngine {
@@ -234,11 +236,13 @@ impl BackupEngine {
 
             let mut info = Vec::with_capacity(n as usize);
             for index in 0..n {
+                let metadata = CStr::from_ptr(ffi::rocksdb_backup_engine_info_metadata(i, index));
                 info.push(BackupEngineInfo {
                     timestamp: ffi::rocksdb_backup_engine_info_timestamp(i, index),
                     backup_id: ffi::rocksdb_backup_engine_info_backup_id(i, index),
                     size: ffi::rocksdb_backup_engine_info_size(i, index),
                     num_files: ffi::rocksdb_backup_engine_info_number_files(i, index),
+                    metadata: String::from_utf8_lossy(metadata.to_bytes()).to_string(),
                 });
             }
 
