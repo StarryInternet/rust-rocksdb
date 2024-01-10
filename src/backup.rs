@@ -128,6 +128,16 @@ impl BackupEngine {
         }
     }
 
+    /// Deletes the backup with the given ID.
+    pub fn delete_backup(&mut self, backup_id: u32) -> Result<(), Error> {
+        unsafe {
+            ffi_try!(ffi::rocksdb_backup_engine_delete_backup(
+                self.inner, backup_id,
+            ));
+            Ok(())
+        }
+    }
+
     pub fn purge_old_backups(&mut self, num_backups_to_keep: usize) -> Result<(), Error> {
         unsafe {
             ffi_try!(ffi::rocksdb_backup_engine_purge_old_backups(
