@@ -20,7 +20,6 @@
 ///! Implementation of bindings to RocksDB Checkpoint[1] API
 ///
 /// [1]: https://github.com/facebook/rocksdb/wiki/Checkpoints
-
 use std::path::Path;
 
 use ffi;
@@ -36,7 +35,7 @@ const LOG_SIZE_FOR_FLUSH: u64 = 0_u64;
 pub struct Checkpoint {
     inner: *mut ffi::rocksdb_checkpoint_t,
     // Keep the DB alive while we're alive.
-    _db: InnerDbType
+    _db: InnerDbType,
 }
 
 impl Drop for Checkpoint {
@@ -58,8 +57,10 @@ impl Checkpoint {
                 try_ffi!(ffi::rocksdb_checkpoint_object_create(db.inner))
             },
             InnerDbType::TxnDB(ref db) => unsafe {
-                try_ffi!(ffi::rocksdb_transactiondb_checkpoint_object_create(db.inner))
-            }
+                try_ffi!(ffi::rocksdb_transactiondb_checkpoint_object_create(
+                    db.inner
+                ))
+            },
         };
 
         if checkpoint.is_null() {
@@ -68,7 +69,7 @@ impl Checkpoint {
 
         Ok(Checkpoint {
             inner: checkpoint,
-            _db: db
+            _db: db,
         })
     }
 
@@ -77,9 +78,11 @@ impl Checkpoint {
         let path = path.as_ref();
         let cpath = pathref_to_cstring(path)?;
         unsafe {
-            try_ffi!(
-                ffi::rocksdb_checkpoint_create(self.inner, cpath.as_ptr(), LOG_SIZE_FOR_FLUSH)
-            );
+            try_ffi!(ffi::rocksdb_checkpoint_create(
+                self.inner,
+                cpath.as_ptr(),
+                LOG_SIZE_FOR_FLUSH
+            ));
         }
         Ok(())
     }

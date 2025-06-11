@@ -17,29 +17,19 @@
 use libc::{c_char, c_uchar};
 
 use ffi;
-use refactor::common::{
-    ColumnFamily,
-    DatabaseVector,
-    RawDatabaseIterator,
-    ReadOptions,
-    Snapshot
-};
+use refactor::common::{ColumnFamily, DatabaseVector, RawDatabaseIterator, ReadOptions, Snapshot};
 use refactor::database::InnerDbType;
 use refactor::errors::Error;
 use refactor::traits::{
-    ColumnFamilyIteration,
-    DatabaseIteration,
-    DatabaseReadNoOptOperations,
-    DatabaseReadOptOperations,
-    DatabaseSnapshotting,
-    DatabaseWriteNoOptOperations
+    ColumnFamilyIteration, DatabaseIteration, DatabaseReadNoOptOperations,
+    DatabaseReadOptOperations, DatabaseSnapshotting, DatabaseWriteNoOptOperations,
 };
 use refactor::utils::c_buf_to_opt_dbvec;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 pub struct TransactionOptions {
-    pub(crate) inner: *mut ffi::rocksdb_transaction_options_t
+    pub(crate) inner: *mut ffi::rocksdb_transaction_options_t,
 }
 
 // FIXME is this okay to assume?
@@ -47,9 +37,7 @@ unsafe impl Send for TransactionOptions {}
 
 impl Default for TransactionOptions {
     fn default() -> Self {
-        let inner = unsafe {
-            ffi::rocksdb_transaction_options_create()
-        };
+        let inner = unsafe { ffi::rocksdb_transaction_options_create() };
         if inner.is_null() {
             panic!("Coud not create RocksDB transaction options")
         }
@@ -110,7 +98,7 @@ impl TransactionOptions {
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 pub struct OptimisticTransactionOptions {
-    pub(crate) inner: *mut ffi::rocksdb_optimistictransaction_options_t
+    pub(crate) inner: *mut ffi::rocksdb_optimistictransaction_options_t,
 }
 
 // FIXME is this okay to assume?
@@ -128,9 +116,7 @@ impl Default for OptimisticTransactionOptions {
 
 impl Drop for OptimisticTransactionOptions {
     fn drop(&mut self) {
-        unsafe {
-            ffi::rocksdb_optimistictransaction_options_destroy(self.inner)
-        }
+        unsafe { ffi::rocksdb_optimistictransaction_options_destroy(self.inner) }
     }
 }
 
@@ -147,7 +133,7 @@ impl OptimisticTransactionOptions {
 
 pub struct Transaction {
     pub(crate) inner: *mut ffi::rocksdb_transaction_t,
-    pub(crate) db: InnerDbType
+    pub(crate) db: InnerDbType,
 }
 
 // FIXME is this okay to assume?
@@ -164,19 +150,11 @@ impl Drop for Transaction {
 // FIXME sort out all the extra things in this impl
 impl Transaction {
     pub fn commit(&self) -> Result<(), Error> {
-        Ok(
-            unsafe {
-                try_ffi!(ffi::rocksdb_transaction_commit(self.inner))
-            }
-        )
+        Ok(unsafe { try_ffi!(ffi::rocksdb_transaction_commit(self.inner)) })
     }
 
     pub fn rollback(&self) -> Result<(), Error> {
-        Ok(
-            unsafe {
-                try_ffi!(ffi::rocksdb_transaction_rollback(self.inner))
-            }
-        )
+        Ok(unsafe { try_ffi!(ffi::rocksdb_transaction_rollback(self.inner)) })
     }
 
     pub fn set_savepoint(&self) {
@@ -186,11 +164,7 @@ impl Transaction {
     }
 
     pub fn rollback_to_savepoint(&self) -> Result<(), Error> {
-        Ok(
-            unsafe {
-                try_ffi!(ffi::rocksdb_transaction_rollback_to_savepoint(self.inner))
-            }
-        )
+        Ok(unsafe { try_ffi!(ffi::rocksdb_transaction_rollback_to_savepoint(self.inner)) })
     }
 
     pub fn get_for_update(&self, key: &[u8]) -> Result<Option<DatabaseVector>, Error> {
@@ -201,7 +175,7 @@ impl Transaction {
     pub fn get_for_update_opt(
         &self,
         key: &[u8],
-        readopts: &ReadOptions
+        readopts: &ReadOptions,
     ) -> Result<Option<DatabaseVector>, Error> {
         let mut val_len = 0;
         let val = unsafe {
@@ -237,7 +211,7 @@ impl DatabaseReadOptOperations for Transaction {
         &self,
         cf_handle: &ColumnFamily,
         key: &[u8],
-        readopts: &ReadOptions
+        readopts: &ReadOptions,
     ) -> Result<Option<DatabaseVector>, Error> {
         let mut val_len = 0;
         let val = unsafe {
@@ -263,7 +237,7 @@ impl DatabaseReadNoOptOperations for Transaction {
     fn get_cf(
         &self,
         cf_handle: &ColumnFamily,
-        key: &[u8]
+        key: &[u8],
     ) -> Result<Option<DatabaseVector>, Error> {
         let readopts = ReadOptions::default();
         self.get_cf_opt(cf_handle, &key, &readopts)
@@ -272,17 +246,15 @@ impl DatabaseReadNoOptOperations for Transaction {
 
 impl DatabaseWriteNoOptOperations for Transaction {
     fn put(&self, key: &[u8], value: &[u8]) -> Result<(), Error> {
-        Ok(
-            unsafe {
-                try_ffi!(ffi::rocksdb_transaction_put(
-                    self.inner,
-                    key.as_ptr() as *const c_char,
-                    key.len(),
-                    value.as_ptr() as *const c_char,
-                    value.len()
-                ))
-            }
-        )
+        Ok(unsafe {
+            try_ffi!(ffi::rocksdb_transaction_put(
+                self.inner,
+                key.as_ptr() as *const c_char,
+                key.len(),
+                value.as_ptr() as *const c_char,
+                value.len()
+            ))
+        })
     }
 
     fn put_cf(&self, cf_handle: &ColumnFamily, key: &[u8], value: &[u8]) -> Result<(), Error> {
@@ -300,29 +272,25 @@ impl DatabaseWriteNoOptOperations for Transaction {
     }
 
     fn merge(&self, key: &[u8], value: &[u8]) -> Result<(), Error> {
-        Ok(
-            unsafe {
-                try_ffi!(ffi::rocksdb_transaction_merge(
-                    self.inner,
-                    key.as_ptr() as *const c_char,
-                    key.len(),
-                    value.as_ptr() as *const c_char,
-                    value.len()
-                ))
-            }
-        )
+        Ok(unsafe {
+            try_ffi!(ffi::rocksdb_transaction_merge(
+                self.inner,
+                key.as_ptr() as *const c_char,
+                key.len(),
+                value.as_ptr() as *const c_char,
+                value.len()
+            ))
+        })
     }
 
     fn delete(&self, key: &[u8]) -> Result<(), Error> {
-        Ok(
-            unsafe {
-                try_ffi!(ffi::rocksdb_transaction_delete(
-                    self.inner,
-                    key.as_ptr() as *const c_char,
-                    key.len()
-                ))
-            }
-        )
+        Ok(unsafe {
+            try_ffi!(ffi::rocksdb_transaction_delete(
+                self.inner,
+                key.as_ptr() as *const c_char,
+                key.len()
+            ))
+        })
     }
 
     fn delete_cf(&self, cf_handle: &ColumnFamily, key: &[u8]) -> Result<(), Error> {
@@ -340,9 +308,7 @@ impl DatabaseWriteNoOptOperations for Transaction {
 
 impl DatabaseIteration for Transaction {
     fn iter_raw_opt(&self, readopts: &ReadOptions) -> RawDatabaseIterator {
-        let iter = unsafe {
-            ffi::rocksdb_transaction_create_iterator(self.inner, readopts.inner)
-        };
+        let iter = unsafe { ffi::rocksdb_transaction_create_iterator(self.inner, readopts.inner) };
         RawDatabaseIterator::from_raw(iter, self.db.clone())
     }
 }
@@ -351,14 +317,10 @@ impl ColumnFamilyIteration for Transaction {
     fn iter_cf_raw_opt(
         &self,
         cf_handle: &ColumnFamily,
-        readopts: &ReadOptions
+        readopts: &ReadOptions,
     ) -> RawDatabaseIterator {
         let iter = unsafe {
-            ffi::rocksdb_transaction_create_iterator_cf(
-                self.inner,
-                readopts.inner,
-                cf_handle.inner
-            )
+            ffi::rocksdb_transaction_create_iterator_cf(self.inner, readopts.inner, cf_handle.inner)
         };
         RawDatabaseIterator::from_raw(iter, self.db.clone())
     }
@@ -375,12 +337,17 @@ mod test {
     use super::*;
     use crate::refactor::{
         common::DatabaseIterator,
-        database::{DBTool, Options, OptimisticTransactionDB},
+        database::{DBTool, OptimisticTransactionDB, Options},
         traits::DatabaseWriteNoOptOperations,
     };
 
     fn put(db: &OptimisticTransactionDB, key: &str, value: &str) {
-        eprintln!("Put {} ({:?}) => {}", key, &AsRef::<[u8]>::as_ref(key), value);
+        eprintln!(
+            "Put {} ({:?}) => {}",
+            key,
+            &AsRef::<[u8]>::as_ref(key),
+            value
+        );
         db.put(&key.as_ref(), &value.as_ref()).unwrap();
     }
 
@@ -388,7 +355,7 @@ mod test {
         let (key_bytes, value) = iter.next().unwrap();
         let (key, value) = (
             std::str::from_utf8(&*key_bytes).unwrap(),
-            std::str::from_utf8(&*value).unwrap()
+            std::str::from_utf8(&*value).unwrap(),
         );
         eprintln!("Got {} ({:?}) => {}", key, &key_bytes, value);
         assert_eq!(key, expected_key);

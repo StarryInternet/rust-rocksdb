@@ -28,7 +28,7 @@ use refactor::transaction::Transaction;
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
 pub struct ReadOptions {
-    pub(crate) inner: *mut ffi::rocksdb_readoptions_t
+    pub(crate) inner: *mut ffi::rocksdb_readoptions_t,
 }
 
 // FIXME this okay?
@@ -36,9 +36,7 @@ unsafe impl Send for ReadOptions {}
 
 impl Default for ReadOptions {
     fn default() -> Self {
-        let inner = unsafe {
-            ffi::rocksdb_readoptions_create()
-        };
+        let inner = unsafe { ffi::rocksdb_readoptions_create() };
         if inner.is_null() {
             panic!("Could not create RocksDB read options");
         }
@@ -48,9 +46,7 @@ impl Default for ReadOptions {
 
 impl Drop for ReadOptions {
     fn drop(&mut self) {
-        unsafe {
-            ffi::rocksdb_readoptions_destroy(self.inner)
-        }
+        unsafe { ffi::rocksdb_readoptions_destroy(self.inner) }
     }
 }
 
@@ -78,28 +74,24 @@ impl ReadOptions {
             ffi::rocksdb_readoptions_set_iterate_upper_bound(
                 self.inner,
                 key.as_ptr() as *const c_char,
-                key.len()
+                key.len(),
             );
         }
     }
 
     pub fn set_prefix_same_as_start(&mut self, enable: bool) {
-        unsafe {
-            ffi::rocksdb_readoptions_set_prefix_same_as_start(self.inner, enable as c_uchar)
-        }
+        unsafe { ffi::rocksdb_readoptions_set_prefix_same_as_start(self.inner, enable as c_uchar) }
     }
 
     pub fn set_total_order_seek(&mut self, enable: bool) {
-        unsafe {
-            ffi::rocksdb_readoptions_set_total_order_seek(self.inner, enable as c_uchar)
-        }
+        unsafe { ffi::rocksdb_readoptions_set_total_order_seek(self.inner, enable as c_uchar) }
     }
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
 pub struct WriteOptions {
-    pub(crate) inner: *mut ffi::rocksdb_writeoptions_t
+    pub(crate) inner: *mut ffi::rocksdb_writeoptions_t,
 }
 
 // FIXME this okay?
@@ -107,9 +99,7 @@ unsafe impl Send for WriteOptions {}
 
 impl Default for WriteOptions {
     fn default() -> Self {
-        let inner = unsafe {
-            ffi::rocksdb_writeoptions_create()
-        };
+        let inner = unsafe { ffi::rocksdb_writeoptions_create() };
         if inner.is_null() {
             panic!("Could not create RocksDB write options");
         }
@@ -146,7 +136,7 @@ impl WriteOptions {
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
 pub struct ColumnFamily {
-    pub(crate) inner: *mut ffi::rocksdb_column_family_handle_t
+    pub(crate) inner: *mut ffi::rocksdb_column_family_handle_t,
 }
 
 // XXX(ssloboda) why was this deemed okay?
@@ -154,9 +144,7 @@ unsafe impl Send for ColumnFamily {}
 
 impl Drop for ColumnFamily {
     fn drop(&mut self) {
-        unsafe {
-            ffi::rocksdb_column_family_handle_destroy(self.inner)
-        }
+        unsafe { ffi::rocksdb_column_family_handle_destroy(self.inner) }
     }
 }
 
@@ -166,17 +154,18 @@ impl Drop for ColumnFamily {
 #[derive(Debug)]
 pub struct ColumnFamilyDescriptor {
     pub(crate) name: String,
-    pub(crate) options: Options
+    pub(crate) options: Options,
 }
 
 impl ColumnFamilyDescriptor {
     // Create a new column family descriptor with the specified name and options.
     pub fn new<S>(name: S, options: Options) -> Self
-        where S: Into<String>
+    where
+        S: Into<String>,
     {
         ColumnFamilyDescriptor {
             name: name.into(),
-            options
+            options,
         }
     }
 }
@@ -190,16 +179,14 @@ impl ColumnFamilyDescriptor {
 /// a slice.
 pub struct DatabaseVector {
     base: *mut u8,
-    len: usize
+    len: usize,
 }
 
 impl Deref for DatabaseVector {
     type Target = [u8];
 
     fn deref(&self) -> &Self::Target {
-        unsafe {
-            ::std::slice::from_raw_parts(self.base, self.len)
-        }
+        unsafe { ::std::slice::from_raw_parts(self.base, self.len) }
     }
 }
 
@@ -229,7 +216,7 @@ impl DatabaseVector {
     pub(crate) unsafe fn from_c(val: *mut u8, val_len: usize) -> Self {
         Self {
             base: val,
-            len: val_len
+            len: val_len,
         }
     }
 
@@ -246,7 +233,7 @@ impl DatabaseVector {
 /// Give this to `ReadOptions` to read/iterate on a snapshot.
 pub struct Snapshot {
     inner: *const ffi::rocksdb_snapshot_t,
-    db: InnerDbType
+    db: InnerDbType,
 }
 
 unsafe impl Send for Snapshot {}
@@ -260,7 +247,7 @@ impl Drop for Snapshot {
             },
             InnerDbType::TxnDB(ref db) => unsafe {
                 ffi::rocksdb_transactiondb_release_snapshot(db.inner, self.inner)
-            }
+            },
         }
     }
 }
@@ -268,32 +255,28 @@ impl Drop for Snapshot {
 impl Snapshot {
     pub(crate) fn from_innerdbtype(db: InnerDbType) -> Snapshot {
         let snapshot = match db {
-            InnerDbType::DB(ref db) => unsafe {
-                ffi::rocksdb_create_snapshot(db.inner)
-            },
+            InnerDbType::DB(ref db) => unsafe { ffi::rocksdb_create_snapshot(db.inner) },
             InnerDbType::TxnDB(ref db) => unsafe {
                 ffi::rocksdb_transactiondb_create_snapshot(db.inner)
-            }
+            },
         };
         if snapshot.is_null() {
             panic!("Cannot create RocksDB snapshot");
         }
         Self {
             inner: snapshot,
-            db: db
+            db: db,
         }
     }
 
     pub(crate) fn from_txn(txn: &Transaction) -> Snapshot {
-        let snapshot = unsafe {
-            ffi::rocksdb_transaction_get_snapshot(txn.inner)
-        };
+        let snapshot = unsafe { ffi::rocksdb_transaction_get_snapshot(txn.inner) };
         if snapshot.is_null() {
             panic!("Cannot create RocksDB snapshot");
         }
         Self {
             inner: snapshot,
-            db: txn.db.clone()
+            db: txn.db.clone(),
         }
     }
 }
@@ -303,7 +286,7 @@ impl Snapshot {
 pub struct RawDatabaseIterator {
     inner: *mut ffi::rocksdb_iterator_t,
     // Keep the DB alive while we're alive.
-    _db: InnerDbType
+    _db: InnerDbType,
 }
 
 impl RawDatabaseIterator {
@@ -311,10 +294,7 @@ impl RawDatabaseIterator {
         if inner.is_null() {
             panic!("Unable to create RocksDB iterator")
         }
-        Self {
-            inner,
-            _db: db
-        }
+        Self { inner, _db: db }
     }
 
     pub(crate) fn from_innerdbtype(db: InnerDbType, readopts: &ReadOptions) -> Self {
@@ -324,15 +304,12 @@ impl RawDatabaseIterator {
             },
             InnerDbType::TxnDB(ref db) => unsafe {
                 ffi::rocksdb_transactiondb_create_iterator(db.inner, readopts.inner)
-            }
+            },
         };
         if inner.is_null() {
             panic!("Unable to create RocksDB iterator")
         }
-        Self {
-            inner,
-            _db: db
-        }
+        Self { inner, _db: db }
     }
 
     pub(crate) fn from_db_cf(
@@ -340,23 +317,20 @@ impl RawDatabaseIterator {
         cf_handle: &ColumnFamily,
         readopts: &ReadOptions,
     ) -> Self {
-        let inner = unsafe {
-            ffi::rocksdb_create_iterator_cf(db.inner, readopts.inner, cf_handle.inner)
-        };
+        let inner =
+            unsafe { ffi::rocksdb_create_iterator_cf(db.inner, readopts.inner, cf_handle.inner) };
         if inner.is_null() {
             panic!("Unable to create RocksDB cf iterator")
         }
         Self {
             inner,
-            _db: InnerDbType::DB(db)
+            _db: InnerDbType::DB(db),
         }
     }
 
     /// Returns true if the iterator is valid.
     pub fn valid(&self) -> bool {
-        unsafe {
-            ffi::rocksdb_iter_valid(self.inner) != 0
-        }
+        unsafe { ffi::rocksdb_iter_valid(self.inner) != 0 }
     }
 
     /// Seeks to the first key in the database.
@@ -456,11 +430,7 @@ impl RawDatabaseIterator {
     /// ```
     pub fn seek(&mut self, key: &[u8]) {
         unsafe {
-            ffi::rocksdb_iter_seek(
-                self.inner,
-                key.as_ptr() as *const c_char,
-                key.len()
-            );
+            ffi::rocksdb_iter_seek(self.inner, key.as_ptr() as *const c_char, key.len());
         }
     }
 
@@ -489,11 +459,7 @@ impl RawDatabaseIterator {
     /// }
     pub fn seek_for_prev(&mut self, key: &[u8]) {
         unsafe {
-            ffi::rocksdb_iter_seek_for_prev(
-                self.inner,
-                key.as_ptr() as *const c_char,
-                key.len()
-            );
+            ffi::rocksdb_iter_seek_for_prev(self.inner, key.as_ptr() as *const c_char, key.len());
         }
     }
 
@@ -534,9 +500,7 @@ impl RawDatabaseIterator {
 
     /// Returns a copy of the current key.
     pub fn key(&self) -> Option<Vec<u8>> {
-        unsafe {
-            self.key_inner().map(|key| key.to_vec())
-        }
+        unsafe { self.key_inner().map(|key| key.to_vec()) }
     }
 
     /// Returns a slice to the internal buffer storing the current value.
@@ -575,13 +539,13 @@ impl Drop for RawDatabaseIterator {
 
 pub enum DatabaseIteratorDirection {
     Forward,
-    Reverse
+    Reverse,
 }
 
 pub enum DatabaseIteratorMode<'a> {
     Start,
     End,
-    From(&'a [u8], DatabaseIteratorDirection)
+    From(&'a [u8], DatabaseIteratorDirection),
 }
 
 pub type KVBytes = (Box<[u8]>, Box<[u8]>);
@@ -616,7 +580,7 @@ pub type KVBytes = (Box<[u8]>, Box<[u8]>);
 pub struct DatabaseIterator {
     raw: RawDatabaseIterator,
     direction: DatabaseIteratorDirection,
-    just_seeked: bool
+    just_seeked: bool,
 }
 
 // XXX(ssloboda) why was this deemed okay?
@@ -672,7 +636,7 @@ impl Iterator for DatabaseIterator {
         } else {
             match self.direction {
                 DatabaseIteratorDirection::Forward => self.raw.next(),
-                DatabaseIteratorDirection::Reverse => self.raw.prev()
+                DatabaseIteratorDirection::Reverse => self.raw.prev(),
             }
         }
 
@@ -680,7 +644,7 @@ impl Iterator for DatabaseIterator {
             // .key() and .value() only ever return None if valid == false, which we've just cheked
             Some((
                 self.raw.key().unwrap().into_boxed_slice(),
-                self.raw.value().unwrap().into_boxed_slice()
+                self.raw.value().unwrap().into_boxed_slice(),
             ))
         } else {
             None

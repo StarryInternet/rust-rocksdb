@@ -20,25 +20,29 @@
 use ffi;
 use refactor::{database::Options, errors::Error, utils::pathref_to_cstring};
 
-use std::{ffi::CStr, path::{Path, PathBuf}, sync::Arc};
+use std::{
+    ffi::CStr,
+    path::{Path, PathBuf},
+    sync::Arc,
+};
 
 use libc::c_int;
 
 // FIXME need Arc?
 pub struct RestoreOptions {
-    inner: *mut ffi::rocksdb_restore_options_t
+    inner: *mut ffi::rocksdb_restore_options_t,
 }
 
 // FIXME need Arc?
 struct RawBackupInfos {
     inner: *const ffi::rocksdb_backup_engine_info_t,
-    count: u16
+    count: u16,
 }
 
 impl RawBackupInfos {
     fn new(backup_engine: *mut ffi::rocksdb_backup_engine_t) -> Self {
         let infos = unsafe { ffi::rocksdb_backup_engine_get_backup_info(backup_engine) };
-        let num_infos = unsafe { ffi:: rocksdb_backup_engine_info_count(infos) };
+        let num_infos = unsafe { ffi::rocksdb_backup_engine_info_count(infos) };
 
         let count = if num_infos < 0 {
             panic!("Backup info count was negative");
@@ -48,7 +52,7 @@ impl RawBackupInfos {
 
         Self {
             inner: infos,
-            count
+            count,
         }
     }
 
@@ -92,23 +96,18 @@ impl RawBackupInfos {
 
 impl Drop for RawBackupInfos {
     fn drop(&mut self) {
-        unsafe {
-            ffi::rocksdb_backup_engine_info_destroy(self.inner)
-        }
+        unsafe { ffi::rocksdb_backup_engine_info_destroy(self.inner) }
     }
 }
 
 pub struct BackupInfo {
     raw_infos: Arc<RawBackupInfos>,
-    index: u16
+    index: u16,
 }
 
 impl BackupInfo {
     fn new(raw_infos: Arc<RawBackupInfos>, index: u16) -> Self {
-        Self {
-            raw_infos,
-            index
-        }
+        Self { raw_infos, index }
     }
 
     pub fn timestamp(&self) -> i64 {
@@ -131,7 +130,7 @@ impl BackupInfo {
 // FIXME need Arc?
 pub struct BackupEngine {
     inner: *mut ffi::rocksdb_backup_engine_t,
-    path: PathBuf
+    path: PathBuf,
 }
 
 unsafe impl Send for BackupEngine {} // FIXME FIXME FIXME not a good idea
@@ -140,10 +139,7 @@ impl BackupEngine {
     // FIXME options must always be the same whenever you open a particular backups directory as
     // noted in rocksdb
     /// Open a backup engine with the specified options.
-    pub fn open<P: AsRef<Path>>(
-        opts: &Options,
-        path: P
-    ) -> Result<BackupEngine, Error> {
+    pub fn open<P: AsRef<Path>>(opts: &Options, path: P) -> Result<BackupEngine, Error> {
         let cpath = pathref_to_cstring(path.as_ref())?;
 
         let share_table_files = false;
@@ -159,7 +155,10 @@ impl BackupEngine {
             return Err(Error::new("Could not initialize backup engine.".to_owned()));
         }
 
-        Ok(BackupEngine { inner, path: path.as_ref().into() })
+        Ok(BackupEngine {
+            inner,
+            path: path.as_ref().into(),
+        })
     }
 
     pub fn path(&self) -> &Path {
@@ -183,7 +182,7 @@ impl BackupEngine {
     pub(crate) fn create_new_backup_from_db_with_metadata(
         &self,
         db: *mut ffi::rocksdb_t,
-        app_metadata: &CStr
+        app_metadata: &CStr,
     ) -> Result<(), Error> {
         let flush_before_backup = true;
         unsafe {
@@ -199,14 +198,19 @@ impl BackupEngine {
 
     pub fn purge_old_backups(&self, num_backups_to_keep: u32) -> Result<(), Error> {
         unsafe {
-            try_ffi!(ffi::rocksdb_backup_engine_purge_old_backups(self.inner, num_backups_to_keep))
+            try_ffi!(ffi::rocksdb_backup_engine_purge_old_backups(
+                self.inner,
+                num_backups_to_keep
+            ))
         };
         Ok(())
     }
 
     pub fn delete_backup(&self, backup_id: u32) -> Result<(), Error> {
         unsafe {
-            try_ffi!(ffi::rocksdb_backup_engine_delete_backup(self.inner, backup_id))
+            try_ffi!(ffi::rocksdb_backup_engine_delete_backup(
+                self.inner, backup_id
+            ))
         };
         Ok(())
     }
@@ -236,7 +240,7 @@ impl BackupEngine {
         &self,
         db_dir: P,
         backup_id: u32,
-        restore_options: &RestoreOptions
+        restore_options: &RestoreOptions,
     ) -> Result<(), Error> {
         // FIXME Assumption is made here that the WAL dir is the same as the DB dir, which is the
         // default unless the DB is opened with options that have the WAL dir set to something else.
@@ -279,7 +283,7 @@ impl BackupEngine {
     pub fn restore_db_from_latest_backup<P: AsRef<Path>>(
         &self,
         db_dir: P,
-        restore_options: &RestoreOptions
+        restore_options: &RestoreOptions,
     ) -> Result<(), Error> {
         // FIXME Assumption is made here that the WAL dir is the same as the DB dir, which is the
         // default unless the DB is opened with options that have the WAL dir set to something else.
@@ -301,7 +305,6 @@ impl BackupEngine {
         let raw_infos = Arc::new(RawBackupInfos::new(self.inner));
         RawBackupInfos::get_infos(raw_infos)
     }
-
 }
 
 impl RestoreOptions {

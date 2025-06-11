@@ -15,7 +15,7 @@
 extern crate rocksdb;
 mod util;
 
-use rocksdb::{DB, MergeOperands, Options, ColumnFamilyDescriptor};
+use rocksdb::{ColumnFamilyDescriptor, MergeOperands, Options, DB};
 use util::DBPath;
 
 #[test]
@@ -43,14 +43,17 @@ pub fn test_column_family() {
         opts.set_merge_operator("test operator", test_provided_merge, None);
         match DB::open(&opts, &n) {
             Ok(_db) => {
-                panic!("should not have opened DB successfully without \
+                panic!(
+                    "should not have opened DB successfully without \
                         specifying column
-            families")
+            families"
+                )
             }
             Err(e) => {
-                assert!(e.to_string()
-                    .starts_with("Invalid argument: You have to open all \
-                                  column families."))
+                assert!(e.to_string().starts_with(
+                    "Invalid argument: You have to open all \
+                                  column families."
+                ))
             }
         }
     }
@@ -76,11 +79,9 @@ pub fn test_column_family() {
     }
 
     // TODO should be able to use writebatch ops with a cf
-    {
-    }
+    {}
     // TODO should be able to iterate over a cf
-    {
-    }
+    {}
     // should b able to drop a cf
     {
         let mut db = DB::open_cf(&Options::default(), &n, &["cf1"]).unwrap();
@@ -136,12 +137,10 @@ fn test_merge_operator() {
         println!("m is {:?}", m);
         // TODO assert!(m.is_ok());
         match db.get(b"k1") {
-            Ok(Some(value)) => {
-                match value.to_utf8() {
-                    Some(v) => println!("retrieved utf8 value: {}", v),
-                    None => println!("did not read valid utf-8 out of the db"),
-                }
-            }
+            Ok(Some(value)) => match value.to_utf8() {
+                Some(v) => println!("retrieved utf8 value: {}", v),
+                None => println!("did not read valid utf-8 out of the db"),
+            },
             Err(_) => println!("error reading value"),
             _ => panic!("value not present!"),
         }
@@ -151,13 +150,13 @@ fn test_merge_operator() {
         assert!(db.delete(b"k1").is_ok());
         assert!(db.get(b"k1").unwrap().is_none());
     }
-
 }
 
-fn test_provided_merge(_: &[u8],
-                       existing_val: Option<&[u8]>,
-                       operands: &mut MergeOperands)
-                       -> Option<Vec<u8>> {
+fn test_provided_merge(
+    _: &[u8],
+    existing_val: Option<&[u8]>,
+    operands: &mut MergeOperands,
+) -> Option<Vec<u8>> {
     let nops = operands.size_hint().0;
     let mut result: Vec<u8> = Vec::with_capacity(nops);
     match existing_val {
@@ -192,7 +191,10 @@ pub fn test_column_family_with_options() {
         match DB::open_cf_descriptors(&opts, &n, cfs) {
             Ok(_db) => println!("created db with column family descriptors succesfully"),
             Err(e) => {
-                panic!("could not create new database with column family descriptors: {}", e);
+                panic!(
+                    "could not create new database with column family descriptors: {}",
+                    e
+                );
             }
         }
     }
@@ -208,7 +210,10 @@ pub fn test_column_family_with_options() {
         match DB::open_cf_descriptors(&opts, &n, cfs) {
             Ok(_db) => println!("succesfully re-opened database with column family descriptors"),
             Err(e) => {
-                panic!("unable to re-open database with column family descriptors: {}", e);
+                panic!(
+                    "unable to re-open database with column family descriptors: {}",
+                    e
+                );
             }
         }
     }
