@@ -16,21 +16,14 @@
 
 use refactor::{
     backup::BackupEngine,
-    errors::Error,
     checkpoint::Checkpoint,
     common::{
-        ColumnFamily,
-        DatabaseIterator,
-        DatabaseIteratorDirection,
-        DatabaseIteratorMode,
-        DatabaseVector,
-        RawDatabaseIterator,
-        ReadOptions,
-        Snapshot,
-        WriteOptions
+        ColumnFamily, DatabaseIterator, DatabaseIteratorDirection, DatabaseIteratorMode,
+        DatabaseVector, RawDatabaseIterator, ReadOptions, Snapshot, WriteOptions,
     },
     database::Options,
-    transaction::Transaction
+    errors::Error,
+    transaction::Transaction,
 };
 
 use std::ffi::CStr;
@@ -67,8 +60,8 @@ impl<T> DatabaseOperations for T where T: DatabaseReadOperations + DatabaseWrite
 pub trait DatabaseReadOperations: DatabaseReadNoOptOperations + DatabaseReadOptOperations {}
 
 // FIXME I don't understand these blanket impls...
-impl<T> DatabaseReadOperations for T
-    where T: DatabaseReadNoOptOperations + DatabaseReadOptOperations {}
+impl<T> DatabaseReadOperations for T where T: DatabaseReadNoOptOperations + DatabaseReadOptOperations
+{}
 // impl<'a, T> DatabaseReadOperations for &'a T
 //     where T: DatabaseReadNoOptOperations + DatabaseReadOptOperations {}
 // impl<'a, T> DatabaseReadOperations for &'a mut T
@@ -77,25 +70,40 @@ impl<T> DatabaseReadOperations for T
 pub trait DatabaseReadNoOptOperations {
     fn get(&self, key: &[u8]) -> Result<Option<DatabaseVector>, Error>;
 
-    fn get_cf(&self, cf_handle: &ColumnFamily, key: &[u8]) -> Result<Option<DatabaseVector>, Error>;
+    fn get_cf(&self, cf_handle: &ColumnFamily, key: &[u8])
+        -> Result<Option<DatabaseVector>, Error>;
 }
 
-impl<'a, T> DatabaseReadNoOptOperations for &'a T where T: DatabaseReadNoOptOperations {
+impl<'a, T> DatabaseReadNoOptOperations for &'a T
+where
+    T: DatabaseReadNoOptOperations,
+{
     fn get(&self, key: &[u8]) -> Result<Option<DatabaseVector>, Error> {
         (**self).get(&key)
     }
 
-    fn get_cf(&self, cf_handle: &ColumnFamily, key: &[u8]) -> Result<Option<DatabaseVector>, Error> {
+    fn get_cf(
+        &self,
+        cf_handle: &ColumnFamily,
+        key: &[u8],
+    ) -> Result<Option<DatabaseVector>, Error> {
         (**self).get_cf(cf_handle, &key)
     }
 }
 
-impl<'a, T> DatabaseReadNoOptOperations for &'a mut T where T: DatabaseReadNoOptOperations {
+impl<'a, T> DatabaseReadNoOptOperations for &'a mut T
+where
+    T: DatabaseReadNoOptOperations,
+{
     fn get(&self, key: &[u8]) -> Result<Option<DatabaseVector>, Error> {
         (**self).get(&key)
     }
 
-    fn get_cf(&self, cf_handle: &ColumnFamily, key: &[u8]) -> Result<Option<DatabaseVector>, Error> {
+    fn get_cf(
+        &self,
+        cf_handle: &ColumnFamily,
+        key: &[u8],
+    ) -> Result<Option<DatabaseVector>, Error> {
         (**self).get_cf(cf_handle, &key)
     }
 }
@@ -111,7 +119,10 @@ pub trait DatabaseReadOptOperations {
     ) -> Result<Option<DatabaseVector>, Error>;
 }
 
-impl<'a, T> DatabaseReadOptOperations for &'a T where T: DatabaseReadOptOperations {
+impl<'a, T> DatabaseReadOptOperations for &'a T
+where
+    T: DatabaseReadOptOperations,
+{
     fn get_opt(&self, key: &[u8], readopts: &ReadOptions) -> Result<Option<DatabaseVector>, Error> {
         (**self).get_opt(&key, &readopts)
     }
@@ -126,7 +137,10 @@ impl<'a, T> DatabaseReadOptOperations for &'a T where T: DatabaseReadOptOperatio
     }
 }
 
-impl<'a, T> DatabaseReadOptOperations for &'a mut T where T: DatabaseReadOptOperations {
+impl<'a, T> DatabaseReadOptOperations for &'a mut T
+where
+    T: DatabaseReadOptOperations,
+{
     fn get_opt(&self, key: &[u8], readopts: &ReadOptions) -> Result<Option<DatabaseVector>, Error> {
         (**self).get_opt(&key, &readopts)
     }
@@ -143,11 +157,16 @@ impl<'a, T> DatabaseReadOptOperations for &'a mut T where T: DatabaseReadOptOper
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
-pub trait DatabaseWriteOperations: DatabaseWriteNoOptOperations + DatabaseWriteOptOperations {}
+pub trait DatabaseWriteOperations:
+    DatabaseWriteNoOptOperations + DatabaseWriteOptOperations
+{
+}
 
 // FIXME I don't understand these blanket impls...
-impl<T> DatabaseWriteOperations for T
-    where T: DatabaseWriteNoOptOperations + DatabaseWriteOptOperations {}
+impl<T> DatabaseWriteOperations for T where
+    T: DatabaseWriteNoOptOperations + DatabaseWriteOptOperations
+{
+}
 // impl<'a, T> DatabaseWriteOperations for &'a T
 //     where T: DatabaseWriteNoOptOperations + DatabaseWriteOptOperations {}
 // impl<'a, T> DatabaseWriteOperations for &'a mut T
@@ -165,7 +184,10 @@ pub trait DatabaseWriteNoOptOperations {
     fn delete_cf(&self, cf_handle: &ColumnFamily, key: &[u8]) -> Result<(), Error>;
 }
 
-impl<'a, T> DatabaseWriteNoOptOperations for &'a T where T: DatabaseWriteNoOptOperations {
+impl<'a, T> DatabaseWriteNoOptOperations for &'a T
+where
+    T: DatabaseWriteNoOptOperations,
+{
     fn put(&self, key: &[u8], value: &[u8]) -> Result<(), Error> {
         (**self).put(&key, &value)
     }
@@ -187,7 +209,10 @@ impl<'a, T> DatabaseWriteNoOptOperations for &'a T where T: DatabaseWriteNoOptOp
     }
 }
 
-impl<'a, T> DatabaseWriteNoOptOperations for &'a mut T where T: DatabaseWriteNoOptOperations {
+impl<'a, T> DatabaseWriteNoOptOperations for &'a mut T
+where
+    T: DatabaseWriteNoOptOperations,
+{
     fn put(&self, key: &[u8], value: &[u8]) -> Result<(), Error> {
         (**self).put(&key, &value)
     }
@@ -220,12 +245,7 @@ pub trait DatabaseWriteOptOperations {
         writeopts: &WriteOptions,
     ) -> Result<(), Error>;
 
-    fn merge_opt(
-        &self,
-        key: &[u8],
-        value: &[u8],
-        writeopts: &WriteOptions,
-    ) -> Result<(), Error>;
+    fn merge_opt(&self, key: &[u8], value: &[u8], writeopts: &WriteOptions) -> Result<(), Error>;
 
     fn delete_opt(&self, key: &[u8], writeopts: &WriteOptions) -> Result<(), Error>;
 
@@ -237,7 +257,10 @@ pub trait DatabaseWriteOptOperations {
     ) -> Result<(), Error>;
 }
 
-impl<'a, T> DatabaseWriteOptOperations for &'a T where T: DatabaseWriteOptOperations {
+impl<'a, T> DatabaseWriteOptOperations for &'a T
+where
+    T: DatabaseWriteOptOperations,
+{
     fn put_opt(&self, key: &[u8], value: &[u8], writeopts: &WriteOptions) -> Result<(), Error> {
         (**self).put_opt(&key, &value, &writeopts)
     }
@@ -252,12 +275,7 @@ impl<'a, T> DatabaseWriteOptOperations for &'a T where T: DatabaseWriteOptOperat
         (**self).put_cf_opt(cf_handle, &key, &value, &writeopts)
     }
 
-    fn merge_opt(
-        &self,
-        key: &[u8],
-        value: &[u8],
-        writeopts: &WriteOptions,
-    ) -> Result<(), Error> {
+    fn merge_opt(&self, key: &[u8], value: &[u8], writeopts: &WriteOptions) -> Result<(), Error> {
         (**self).merge_opt(&key, &value, &writeopts)
     }
 
@@ -275,7 +293,10 @@ impl<'a, T> DatabaseWriteOptOperations for &'a T where T: DatabaseWriteOptOperat
     }
 }
 
-impl<'a, T> DatabaseWriteOptOperations for &'a mut T where T: DatabaseWriteOptOperations {
+impl<'a, T> DatabaseWriteOptOperations for &'a mut T
+where
+    T: DatabaseWriteOptOperations,
+{
     fn put_opt(&self, key: &[u8], value: &[u8], writeopts: &WriteOptions) -> Result<(), Error> {
         (**self).put_opt(&key, &value, &writeopts)
     }
@@ -290,12 +311,7 @@ impl<'a, T> DatabaseWriteOptOperations for &'a mut T where T: DatabaseWriteOptOp
         (**self).put_cf_opt(cf_handle, &key, &value, &writeopts)
     }
 
-    fn merge_opt(
-        &self,
-        key: &[u8],
-        value: &[u8],
-        writeopts: &WriteOptions,
-    ) -> Result<(), Error> {
+    fn merge_opt(&self, key: &[u8], value: &[u8], writeopts: &WriteOptions) -> Result<(), Error> {
         (**self).merge_opt(&key, &value, &writeopts)
     }
 
@@ -359,30 +375,36 @@ pub trait DatabaseIteration {
         readopts.set_prefix_same_as_start(true);
         DatabaseIterator::from_raw(
             self.iter_raw_opt(&readopts),
-            DatabaseIteratorMode::From(prefix, DatabaseIteratorDirection::Forward)
+            DatabaseIteratorMode::From(prefix, DatabaseIteratorDirection::Forward),
         )
     }
 
     fn iter_prefix_opt<'p>(
         &self,
         prefix: &'p [u8],
-        readopts: &mut ReadOptions // FIXME kinda gross that this is mut
+        readopts: &mut ReadOptions, // FIXME kinda gross that this is mut
     ) -> DatabaseIterator {
         readopts.set_prefix_same_as_start(true);
         DatabaseIterator::from_raw(
             self.iter_raw_opt(&readopts),
-            DatabaseIteratorMode::From(prefix, DatabaseIteratorDirection::Forward)
+            DatabaseIteratorMode::From(prefix, DatabaseIteratorDirection::Forward),
         )
     }
 }
 
-impl<'a, T> DatabaseIteration for &'a T where T: DatabaseIteration {
+impl<'a, T> DatabaseIteration for &'a T
+where
+    T: DatabaseIteration,
+{
     fn iter_raw_opt(&self, readopts: &ReadOptions) -> RawDatabaseIterator {
         (**self).iter_raw_opt(&readopts)
     }
 }
 
-impl<'a, T> DatabaseIteration for &'a mut T where T: DatabaseIteration {
+impl<'a, T> DatabaseIteration for &'a mut T
+where
+    T: DatabaseIteration,
+{
     fn iter_raw_opt(&self, readopts: &ReadOptions) -> RawDatabaseIterator {
         (**self).iter_raw_opt(&readopts)
     }
@@ -399,7 +421,7 @@ pub trait ColumnFamilyIteration {
     fn iter_cf_raw_opt(
         &self,
         cf_handle: &ColumnFamily,
-        readopts: &ReadOptions
+        readopts: &ReadOptions,
     ) -> RawDatabaseIterator;
 
     fn iter_cf(&self, cf_handle: &ColumnFamily, mode: DatabaseIteratorMode) -> DatabaseIterator {
@@ -409,7 +431,7 @@ pub trait ColumnFamilyIteration {
     fn iter_cf_full(
         &self,
         cf_handle: &ColumnFamily,
-        mode: DatabaseIteratorMode
+        mode: DatabaseIteratorMode,
     ) -> DatabaseIterator {
         let mut readopts = ReadOptions::default();
         readopts.set_total_order_seek(true);
@@ -420,7 +442,7 @@ pub trait ColumnFamilyIteration {
         &self,
         cf_handle: &ColumnFamily,
         mode: DatabaseIteratorMode,
-        readopts: &mut ReadOptions
+        readopts: &mut ReadOptions,
     ) -> DatabaseIterator {
         readopts.set_total_order_seek(true);
         DatabaseIterator::from_raw(self.iter_cf_raw_opt(cf_handle, &readopts), mode)
@@ -431,7 +453,7 @@ pub trait ColumnFamilyIteration {
         readopts.set_prefix_same_as_start(true);
         DatabaseIterator::from_raw(
             self.iter_cf_raw_opt(cf_handle, &readopts),
-            DatabaseIteratorMode::From(prefix, DatabaseIteratorDirection::Forward)
+            DatabaseIteratorMode::From(prefix, DatabaseIteratorDirection::Forward),
         )
     }
 
@@ -439,17 +461,20 @@ pub trait ColumnFamilyIteration {
         &self,
         cf_handle: &ColumnFamily,
         prefix: &'p [u8],
-        readopts: &mut ReadOptions // FIXME kinda gross that this is mut
+        readopts: &mut ReadOptions, // FIXME kinda gross that this is mut
     ) -> DatabaseIterator {
         readopts.set_prefix_same_as_start(true);
         DatabaseIterator::from_raw(
             self.iter_cf_raw_opt(cf_handle, &readopts),
-            DatabaseIteratorMode::From(prefix, DatabaseIteratorDirection::Forward)
+            DatabaseIteratorMode::From(prefix, DatabaseIteratorDirection::Forward),
         )
     }
 }
 
-impl<'a, T> ColumnFamilyIteration for &'a T where T: ColumnFamilyIteration {
+impl<'a, T> ColumnFamilyIteration for &'a T
+where
+    T: ColumnFamilyIteration,
+{
     fn iter_cf_raw(&self, cf_handle: &ColumnFamily) -> RawDatabaseIterator {
         (**self).iter_cf_raw(cf_handle)
     }
@@ -457,7 +482,7 @@ impl<'a, T> ColumnFamilyIteration for &'a T where T: ColumnFamilyIteration {
     fn iter_cf_raw_opt(
         &self,
         cf_handle: &ColumnFamily,
-        readopts: &ReadOptions
+        readopts: &ReadOptions,
     ) -> RawDatabaseIterator {
         (**self).iter_cf_raw_opt(cf_handle, &readopts)
     }
@@ -469,7 +494,7 @@ impl<'a, T> ColumnFamilyIteration for &'a T where T: ColumnFamilyIteration {
     fn iter_cf_full(
         &self,
         cf_handle: &ColumnFamily,
-        mode: DatabaseIteratorMode
+        mode: DatabaseIteratorMode,
     ) -> DatabaseIterator {
         (**self).iter_cf_full(cf_handle, mode)
     }
@@ -479,7 +504,10 @@ impl<'a, T> ColumnFamilyIteration for &'a T where T: ColumnFamilyIteration {
     }
 }
 
-impl<'a, T> ColumnFamilyIteration for &'a mut T where T: ColumnFamilyIteration {
+impl<'a, T> ColumnFamilyIteration for &'a mut T
+where
+    T: ColumnFamilyIteration,
+{
     fn iter_cf_raw(&self, cf_handle: &ColumnFamily) -> RawDatabaseIterator {
         (**self).iter_cf_raw(cf_handle)
     }
@@ -487,7 +515,7 @@ impl<'a, T> ColumnFamilyIteration for &'a mut T where T: ColumnFamilyIteration {
     fn iter_cf_raw_opt(
         &self,
         cf_handle: &ColumnFamily,
-        readopts: &ReadOptions
+        readopts: &ReadOptions,
     ) -> RawDatabaseIterator {
         (**self).iter_cf_raw_opt(cf_handle, &readopts)
     }
@@ -499,7 +527,7 @@ impl<'a, T> ColumnFamilyIteration for &'a mut T where T: ColumnFamilyIteration {
     fn iter_cf_full(
         &self,
         cf_handle: &ColumnFamily,
-        mode: DatabaseIteratorMode
+        mode: DatabaseIteratorMode,
     ) -> DatabaseIterator {
         (**self).iter_cf_full(cf_handle, mode)
     }
@@ -520,7 +548,10 @@ pub trait DatabaseTransactions {
     fn begin_transaction_opt(&self, writeopts: &WriteOptions) -> Transaction;
 }
 
-impl<'a, T> DatabaseTransactions for &'a T where T: DatabaseTransactions {
+impl<'a, T> DatabaseTransactions for &'a T
+where
+    T: DatabaseTransactions,
+{
     fn begin_transaction(&self) -> Transaction {
         (**self).begin_transaction()
     }
@@ -530,7 +561,10 @@ impl<'a, T> DatabaseTransactions for &'a T where T: DatabaseTransactions {
     }
 }
 
-impl<'a, T> DatabaseTransactions for &'a mut T where T: DatabaseTransactions {
+impl<'a, T> DatabaseTransactions for &'a mut T
+where
+    T: DatabaseTransactions,
+{
     fn begin_transaction(&self) -> Transaction {
         (**self).begin_transaction()
     }
@@ -546,13 +580,19 @@ pub trait DatabaseSnapshotting {
     fn snapshot(&self) -> Snapshot;
 }
 
-impl<'a, T> DatabaseSnapshotting for &'a T where T: DatabaseSnapshotting {
+impl<'a, T> DatabaseSnapshotting for &'a T
+where
+    T: DatabaseSnapshotting,
+{
     fn snapshot(&self) -> Snapshot {
         (**self).snapshot()
     }
 }
 
-impl<'a, T> DatabaseSnapshotting for &'a mut T where T: DatabaseSnapshotting {
+impl<'a, T> DatabaseSnapshotting for &'a mut T
+where
+    T: DatabaseSnapshotting,
+{
     fn snapshot(&self) -> Snapshot {
         (**self).snapshot()
     }
@@ -575,6 +615,6 @@ pub trait DatabaseBackups {
     fn create_backup_with_metadata(
         &self,
         backup_engine: &BackupEngine,
-        metadata: &CStr
+        metadata: &CStr,
     ) -> Result<(), Error>;
 }

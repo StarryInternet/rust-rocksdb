@@ -13,9 +13,8 @@
 // limitations under the License.
 //
 
-
-use {DB, Error};
 use ffi;
+use {Error, DB};
 
 use libc::c_int;
 use std::ffi::CString;
@@ -52,7 +51,13 @@ impl BackupEngine {
         };
 
         let be: *mut ffi::rocksdb_backup_engine_t;
-        unsafe { be = ffi_try!(ffi::rocksdb_backup_engine_open(opts.inner, cpath.as_ptr(), true as c_int,)) }
+        unsafe {
+            be = ffi_try!(ffi::rocksdb_backup_engine_open(
+                opts.inner,
+                cpath.as_ptr(),
+                true as c_int,
+            ))
+        }
 
         if be.is_null() {
             return Err(Error::new("Could not initialize backup engine.".to_owned()));

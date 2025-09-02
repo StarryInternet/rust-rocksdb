@@ -20,12 +20,10 @@
 use std::{
     collections::BTreeMap,
     ffi::{CStr, CString},
-    fs,
+    fs, mem,
     path::{Path, PathBuf},
-    ptr,
-    mem,
+    ptr, slice,
     sync::Arc,
-    slice
 };
 
 use libc::{c_char, c_int, c_uchar};
@@ -35,31 +33,18 @@ use refactor::{
     backup::BackupEngine,
     checkpoint::Checkpoint,
     common::{
-        ColumnFamily,
-        ColumnFamilyDescriptor,
-        DatabaseVector,
-        RawDatabaseIterator,
-        ReadOptions,
-        Snapshot,
-        WriteOptions
+        ColumnFamily, ColumnFamilyDescriptor, DatabaseVector, RawDatabaseIterator, ReadOptions,
+        Snapshot, WriteOptions,
     },
     errors::Error,
     traits::{
-        ColumnFamilyIteration,
-        ColumnFamilyMergeOperations,
-        DatabaseBackups,
-        DatabaseCheckpoints,
-        DatabaseIteration,
-        DatabaseMetaOperations,
-        DatabaseReadNoOptOperations,
-        DatabaseReadOptOperations,
-        DatabaseTransactions,
-        DatabaseSnapshotting,
-        DatabaseWriteNoOptOperations,
-        DatabaseWriteOptOperations
+        ColumnFamilyIteration, ColumnFamilyMergeOperations, DatabaseBackups, DatabaseCheckpoints,
+        DatabaseIteration, DatabaseMetaOperations, DatabaseReadNoOptOperations,
+        DatabaseReadOptOperations, DatabaseSnapshotting, DatabaseTransactions,
+        DatabaseWriteNoOptOperations, DatabaseWriteOptOperations,
     },
     transaction::{OptimisticTransactionOptions, Transaction, TransactionOptions},
-    utils::{c_buf_to_opt_dbvec, pathref_to_cstring}
+    utils::{c_buf_to_opt_dbvec, pathref_to_cstring},
 };
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
@@ -67,7 +52,7 @@ use refactor::{
 #[derive(Clone)]
 pub(crate) enum InnerDbType {
     DB(Arc<InnerDB>),
-    TxnDB(Arc<InnerTransactionDB>)
+    TxnDB(Arc<InnerTransactionDB>),
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
@@ -111,19 +96,22 @@ impl DBTool {
     }
 
     pub(crate) fn prepare_open_column_family_args(
-        cfs: Vec<ColumnFamilyDescriptor>
-    ) -> Result<(
-        Vec<ColumnFamilyDescriptor>,
-        Vec<CString>,
-        Vec<*const ffi::rocksdb_options_t>,
-        Vec<*mut ffi::rocksdb_column_family_handle_t>
-    ), Error> {
+        cfs: Vec<ColumnFamilyDescriptor>,
+    ) -> Result<
+        (
+            Vec<ColumnFamilyDescriptor>,
+            Vec<CString>,
+            Vec<*const ffi::rocksdb_options_t>,
+            Vec<*mut ffi::rocksdb_column_family_handle_t>,
+        ),
+        Error,
+    > {
         let mut cfs_v = cfs;
         // Always open the default column family.
         if !cfs_v.iter().any(|cf| cf.name == "default") {
             cfs_v.push(ColumnFamilyDescriptor {
                 name: String::from("default"),
-                options: Options::default()
+                options: Options::default(),
             });
         }
 
@@ -137,7 +125,8 @@ impl DBTool {
         // These handles will be populated by DB.
         let cfhandles: Vec<_> = cfs_v.iter().map(|_| ptr::null_mut()).collect();
 
-        let cfopts: Vec<_> = cfs_v.iter()
+        let cfopts: Vec<_> = cfs_v
+            .iter()
             .map(|cf| cf.options.inner as *const _)
             .collect();
 
@@ -146,7 +135,7 @@ impl DBTool {
 
     pub(crate) fn make_column_families(
         cfs_v: Vec<ColumnFamilyDescriptor>,
-        cfhandles: Vec<*mut ffi::rocksdb_column_family_handle_t>
+        cfhandles: Vec<*mut ffi::rocksdb_column_family_handle_t>,
     ) -> Result<BTreeMap<String, ColumnFamily>, Error> {
         let mut cf_map = BTreeMap::new();
 
@@ -173,7 +162,7 @@ pub enum DBRecoveryMode {
     TolerateCorruptedTailRecords = ffi::rocksdb_tolerate_corrupted_tail_records_recovery as isize,
     AbsoluteConsistency = ffi::rocksdb_absolute_consistency_recovery as isize,
     PointInTime = ffi::rocksdb_point_in_time_recovery as isize,
-    SkipAnyCorruptedRecord = ffi::rocksdb_skip_any_corrupted_records_recovery as isize
+    SkipAnyCorruptedRecord = ffi::rocksdb_skip_any_corrupted_records_recovery as isize,
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
@@ -215,7 +204,7 @@ pub enum DBRecoveryMode {
 /// ```
 #[derive(Debug)]
 pub struct Options {
-    pub(crate) inner: *mut ffi::rocksdb_options_t // FIXME
+    pub(crate) inner: *mut ffi::rocksdb_options_t, // FIXME
 }
 
 // XXX(ssloboda) why was this deemed okay?
@@ -223,9 +212,7 @@ unsafe impl Send for Options {}
 
 impl Default for Options {
     fn default() -> Self {
-        let inner = unsafe {
-            ffi::rocksdb_options_create()
-        };
+        let inner = unsafe { ffi::rocksdb_options_create() };
         if inner.is_null() {
             panic!("Could not create RocksDB options");
         }
@@ -258,7 +245,7 @@ impl Options {
         unsafe {
             ffi::rocksdb_options_set_create_missing_column_families(
                 self.inner,
-                create_missing_column_families as c_uchar
+                create_missing_column_families as c_uchar,
             );
         }
         self
@@ -297,21 +284,19 @@ type DBDropFn = unsafe extern "C" fn(*mut ffi::rocksdb_t);
 
 pub(crate) struct InnerDB {
     pub(crate) inner: *mut ffi::rocksdb_t,
-    drop_fn: DBDropFn
+    drop_fn: DBDropFn,
 }
 
 impl Drop for InnerDB {
     fn drop(&mut self) {
-        unsafe {
-            (self.drop_fn)(self.inner)
-        }
+        unsafe { (self.drop_fn)(self.inner) }
     }
 }
 
 pub struct DB {
     cfs: BTreeMap<String, ColumnFamily>,
     inner: Arc<InnerDB>,
-    path: PathBuf
+    path: PathBuf,
 }
 
 unsafe impl Send for DB {} // FIXME is this okay?
@@ -323,18 +308,17 @@ impl DB {
 
     /// Open a database with default options.
     pub fn open_default<P>(path: P) -> Result<Self, Error>
-        where
-            P: AsRef<Path>
+    where
+        P: AsRef<Path>,
     {
-        let opts = Options::default()
-            .create_if_missing(true);
+        let opts = Options::default().create_if_missing(true);
         Self::open(&opts, path)
     }
 
     /// Open the database with the specified options.
     pub fn open<P>(opts: &Options, path: P) -> Result<Self, Error>
-        where
-            P: AsRef<Path>
+    where
+        P: AsRef<Path>,
     {
         Self::open_cf(opts, path, &[])
     }
@@ -343,8 +327,8 @@ impl DB {
     ///
     /// Column families opened using this function will be created with default `Options`.
     pub fn open_cf<P>(opts: &Options, path: P, cfs: &[&str]) -> Result<Self, Error>
-        where
-            P: AsRef<Path>
+    where
+        P: AsRef<Path>,
     {
         let cfs_v = cfs
             .to_vec()
@@ -359,21 +343,22 @@ impl DB {
     pub fn open_cf_descriptors<P>(
         opts: &Options,
         path: P,
-        cfs: Vec<ColumnFamilyDescriptor>
+        cfs: Vec<ColumnFamilyDescriptor>,
     ) -> Result<Self, Error>
-        where
-            P: AsRef<Path>
+    where
+        P: AsRef<Path>,
     {
         let path = path.as_ref();
         let cpath = pathref_to_cstring(path)?;
         if let Err(err) = fs::create_dir_all(&path) {
-            return Err(Error::new(format!("Failed to create RocksDB directory: `{:?}`.", err)));
+            return Err(Error::new(format!(
+                "Failed to create RocksDB directory: `{:?}`.",
+                err
+            )));
         }
 
         let (db, cf_map) = if cfs.len() == 0 {
-            let db = unsafe {
-                try_ffi!(ffi::rocksdb_open(opts.inner, cpath.as_ptr() as *const _))
-            };
+            let db = unsafe { try_ffi!(ffi::rocksdb_open(opts.inner, cpath.as_ptr() as *const _)) };
             if db.is_null() {
                 return Err(Error::new("Failed to open database".into()));
             }
@@ -405,7 +390,10 @@ impl DB {
         };
 
         Ok(Self {
-            inner: Arc::new(InnerDB { inner: db, drop_fn: ffi::rocksdb_close }),
+            inner: Arc::new(InnerDB {
+                inner: db,
+                drop_fn: ffi::rocksdb_close,
+            }),
             cfs: cf_map,
             path: path.to_path_buf(),
         })
@@ -417,7 +405,10 @@ impl DatabaseMetaOperations for DB {
         {
             let cf_handle = self.get_cf_handle(cf_name)?;
             unsafe {
-                try_ffi!(ffi::rocksdb_drop_column_family(self.inner.inner, cf_handle.inner))
+                try_ffi!(ffi::rocksdb_drop_column_family(
+                    self.inner.inner,
+                    cf_handle.inner
+                ))
             }
         }
         self.cfs.remove(cf_name);
@@ -426,7 +417,10 @@ impl DatabaseMetaOperations for DB {
 
     fn create_cf_opt(&mut self, cf_name: &str, opts: &Options) -> Result<&ColumnFamily, Error> {
         if self.cfs.contains_key(cf_name) {
-            return Err(Error::new(format!("Column family \"{}\" already exists", cf_name)));
+            return Err(Error::new(format!(
+                "Column family \"{}\" already exists",
+                cf_name
+            )));
         }
 
         let cf_name_cstring = CString::new(cf_name.as_bytes())?;
@@ -447,7 +441,7 @@ impl DatabaseMetaOperations for DB {
     fn get_cf_handle(&self, cf_name: &str) -> Result<&ColumnFamily, Error> {
         match self.cfs.get(cf_name) {
             Some(cf_handle) => Ok(cf_handle),
-            None => Err(Error::new(format!("No such column family {}", cf_name)))
+            None => Err(Error::new(format!("No such column family {}", cf_name))),
         }
     }
 }
@@ -458,7 +452,11 @@ impl DatabaseReadNoOptOperations for DB {
         self.get_opt(key, &readopts)
     }
 
-    fn get_cf(&self, cf_handle: &ColumnFamily, key: &[u8]) -> Result<Option<DatabaseVector>, Error> {
+    fn get_cf(
+        &self,
+        cf_handle: &ColumnFamily,
+        key: &[u8],
+    ) -> Result<Option<DatabaseVector>, Error> {
         let readopts = ReadOptions::default();
         self.get_cf_opt(cf_handle, key, &readopts)
     }
@@ -563,12 +561,7 @@ impl DatabaseWriteOptOperations for DB {
         Ok(())
     }
 
-    fn merge_opt(
-        &self,
-        key: &[u8],
-        value: &[u8],
-        writeopts: &WriteOptions,
-    ) -> Result<(), Error> {
+    fn merge_opt(&self, key: &[u8], value: &[u8], writeopts: &WriteOptions) -> Result<(), Error> {
         unsafe {
             try_ffi!(ffi::rocksdb_merge(
                 self.inner.inner,
@@ -646,7 +639,7 @@ impl ColumnFamilyIteration for DB {
     fn iter_cf_raw_opt(
         &self,
         cf_handle: &ColumnFamily,
-        readopts: &ReadOptions
+        readopts: &ReadOptions,
     ) -> RawDatabaseIterator {
         RawDatabaseIterator::from_db_cf(self.inner.clone(), cf_handle, &readopts)
     }
@@ -668,7 +661,7 @@ impl DatabaseCheckpoints for DB {
 
 pub struct OptimisticTransactionDB {
     inner: *mut ffi::rocksdb_optimistictransactiondb_t,
-    base_db: DB
+    base_db: DB,
 }
 
 unsafe impl Send for OptimisticTransactionDB {} // FIXME is this okay?
@@ -680,18 +673,17 @@ impl OptimisticTransactionDB {
 
     /// Open a database with default options.
     pub fn open_default<P>(path: P) -> Result<Self, Error>
-        where
-            P: AsRef<Path>
+    where
+        P: AsRef<Path>,
     {
-        let opts = Options::default()
-            .create_if_missing(true);
+        let opts = Options::default().create_if_missing(true);
         Self::open(&opts, path)
     }
 
     /// Open the database with the specified options.
     pub fn open<P>(opts: &Options, path: P) -> Result<Self, Error>
-        where
-            P: AsRef<Path>
+    where
+        P: AsRef<Path>,
     {
         Self::open_cf(opts, path, &[])
     }
@@ -700,8 +692,8 @@ impl OptimisticTransactionDB {
     ///
     /// Column families opened using this function will be created with default `Options`.
     pub fn open_cf<P>(opts: &Options, path: P, cfs: &[&str]) -> Result<Self, Error>
-        where
-            P: AsRef<Path>
+    where
+        P: AsRef<Path>,
     {
         let cfs_v = cfs
             .to_vec()
@@ -716,15 +708,18 @@ impl OptimisticTransactionDB {
     pub fn open_cf_descriptors<P>(
         opts: &Options,
         path: P,
-        cfs: Vec<ColumnFamilyDescriptor>
+        cfs: Vec<ColumnFamilyDescriptor>,
     ) -> Result<Self, Error>
-        where
-            P: AsRef<Path>
+    where
+        P: AsRef<Path>,
     {
         let path = path.as_ref();
         let cpath = pathref_to_cstring(path)?;
         if let Err(err) = fs::create_dir_all(&path) {
-            return Err(Error::new(format!("Failed to create RocksDB directory: `{:?}`.", err)));
+            return Err(Error::new(format!(
+                "Failed to create RocksDB directory: `{:?}`.",
+                err
+            )));
         }
 
         let (db, cf_map) = if cfs.len() == 0 {
@@ -747,7 +742,7 @@ impl OptimisticTransactionDB {
             if !cfs_v.iter().any(|cf| cf.name == "default") {
                 cfs_v.push(ColumnFamilyDescriptor {
                     name: String::from("default"),
-                    options: Options::default()
+                    options: Options::default(),
                 });
             }
             // We need to store our CStrings in an intermediate vector
@@ -757,18 +752,14 @@ impl OptimisticTransactionDB {
                 .map(|cf| CString::new(cf.name.as_bytes()).map_err(Into::into))
                 .collect::<Result<Vec<_>, Error>>()?;
 
-            let mut cfnames: Vec<*const c_char> = c_cfs
-                .iter()
-                .map(|cf| cf.as_ptr())
-                .collect();
+            let mut cfnames: Vec<*const c_char> = c_cfs.iter().map(|cf| cf.as_ptr()).collect();
 
             // These handles will be populated by DB.
-            let mut cfhandles: Vec<*mut ffi::rocksdb_column_family_handle_t> = cfs_v
-                .iter()
-                .map(|_| ptr::null_mut())
-                .collect();
+            let mut cfhandles: Vec<*mut ffi::rocksdb_column_family_handle_t> =
+                cfs_v.iter().map(|_| ptr::null_mut()).collect();
 
-            let mut cfopts: Vec<*const ffi::rocksdb_options_t> = cfs_v.iter()
+            let mut cfopts: Vec<*const ffi::rocksdb_options_t> = cfs_v
+                .iter()
                 .map(|cf| cf.options.inner as *const _)
                 .collect();
 
@@ -794,42 +785,40 @@ impl OptimisticTransactionDB {
 
         Ok(Self {
             inner: db,
-            base_db: Self::make_base_db(db, cf_map, path.to_path_buf())
+            base_db: Self::make_base_db(db, cf_map, path.to_path_buf()),
         })
     }
 
     fn make_base_db(
         inner: *mut ffi::rocksdb_optimistictransactiondb_t,
         cfs: BTreeMap<String, ColumnFamily>,
-        path: PathBuf
+        path: PathBuf,
     ) -> DB {
-        let db = unsafe {
-            ffi::rocksdb_optimistictransactiondb_get_base_db(inner)
-        };
+        let db = unsafe { ffi::rocksdb_optimistictransactiondb_get_base_db(inner) };
         if db.is_null() {
             panic!("Could not get base DB for RocksDB OptimisticTransactionDB");
         }
         DB {
             inner: Arc::new(InnerDB {
                 inner: db,
-                drop_fn: ffi::rocksdb_optimistictransactiondb_close_base_db
+                drop_fn: ffi::rocksdb_optimistictransactiondb_close_base_db,
             }),
             cfs,
-            path
+            path,
         }
     }
 
     pub fn begin_transaction_opt_full(
         &self,
         writeopts: &WriteOptions,
-        opttxnopts: &OptimisticTransactionOptions
+        opttxnopts: &OptimisticTransactionOptions,
     ) -> Transaction {
         let txn = unsafe {
             ffi::rocksdb_optimistictransaction_begin(
                 self.inner,
                 writeopts.inner,
                 opttxnopts.inner,
-                ptr::null_mut()
+                ptr::null_mut(),
             )
         };
         if txn.is_null() {
@@ -838,7 +827,7 @@ impl OptimisticTransactionDB {
 
         Transaction {
             inner: txn,
-            db: InnerDbType::DB(self.base_db.inner.clone())
+            db: InnerDbType::DB(self.base_db.inner.clone()),
         }
     }
 }
@@ -867,16 +856,14 @@ impl Drop for OptimisticTransactionDB {
             cfs: Default::default(),
             inner: Arc::new(InnerDB {
                 inner: ptr::null_mut(),
-                drop_fn: noop_drop_fn
+                drop_fn: noop_drop_fn,
             }),
-            path: Default::default()
+            path: Default::default(),
         };
         let base_db = mem::replace(&mut self.base_db, dummy);
         drop(base_db);
 
-        unsafe {
-            ffi::rocksdb_optimistictransactiondb_close(self.inner)
-        }
+        unsafe { ffi::rocksdb_optimistictransactiondb_close(self.inner) }
     }
 }
 
@@ -885,7 +872,11 @@ impl DatabaseReadNoOptOperations for OptimisticTransactionDB {
         self.base_db.get(key)
     }
 
-    fn get_cf(&self, cf_handle: &ColumnFamily, key: &[u8]) -> Result<Option<DatabaseVector>, Error> {
+    fn get_cf(
+        &self,
+        cf_handle: &ColumnFamily,
+        key: &[u8],
+    ) -> Result<Option<DatabaseVector>, Error> {
         self.base_db.get_cf(cf_handle, key)
     }
 }
@@ -942,12 +933,7 @@ impl DatabaseWriteOptOperations for OptimisticTransactionDB {
         self.base_db.put_cf_opt(cf_handle, key, value, &writeopts)
     }
 
-    fn merge_opt(
-        &self,
-        key: &[u8],
-        value: &[u8],
-        writeopts: &WriteOptions,
-    ) -> Result<(), Error> {
+    fn merge_opt(&self, key: &[u8], value: &[u8], writeopts: &WriteOptions) -> Result<(), Error> {
         self.base_db.merge_opt(key, value, &writeopts)
     }
 
@@ -987,7 +973,7 @@ impl ColumnFamilyIteration for OptimisticTransactionDB {
     fn iter_cf_raw_opt(
         &self,
         cf_handle: &ColumnFamily,
-        readopts: &ReadOptions
+        readopts: &ReadOptions,
     ) -> RawDatabaseIterator {
         self.base_db.iter_cf_raw_opt(cf_handle, readopts)
     }
@@ -1020,7 +1006,7 @@ impl DatabaseBackups for OptimisticTransactionDB {
     fn create_backup_with_metadata(
         &self,
         backup_engine: &BackupEngine,
-        metadata: &CStr
+        metadata: &CStr,
     ) -> Result<(), Error> {
         backup_engine.create_new_backup_from_db_with_metadata((*self.base_db.inner).inner, metadata)
     }
@@ -1029,28 +1015,22 @@ impl DatabaseBackups for OptimisticTransactionDB {
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
 pub struct TransactionDBOptions {
-    inner: *mut ffi::rocksdb_transactiondb_options_t
+    inner: *mut ffi::rocksdb_transactiondb_options_t,
 }
 
 impl Default for TransactionDBOptions {
     fn default() -> Self {
-        let inner = unsafe {
-            ffi::rocksdb_transactiondb_options_create()
-        };
+        let inner = unsafe { ffi::rocksdb_transactiondb_options_create() };
         if inner.is_null() {
             panic!("Cannot create RocksDB transactiondb options");
         }
-        Self {
-            inner
-        }
+        Self { inner }
     }
 }
 
 impl Drop for TransactionDBOptions {
     fn drop(&mut self) {
-        unsafe {
-            ffi::rocksdb_transactiondb_options_destroy(self.inner)
-        }
+        unsafe { ffi::rocksdb_transactiondb_options_destroy(self.inner) }
     }
 }
 
@@ -1083,14 +1063,14 @@ impl TransactionDBOptions {
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
 pub(crate) struct InnerTransactionDB {
-    pub(crate) inner: *mut ffi::rocksdb_transactiondb_t
+    pub(crate) inner: *mut ffi::rocksdb_transactiondb_t,
 }
 
 impl InnerTransactionDB {
     fn open(
         opts: &Options,
         txndb_opts: &TransactionDBOptions,
-        cpath: &CString
+        cpath: &CString,
     ) -> Result<Self, Error> {
         let inner = unsafe {
             try_ffi!(ffi::rocksdb_transactiondb_open(
@@ -1101,7 +1081,9 @@ impl InnerTransactionDB {
         };
 
         if inner.is_null() {
-            return Err(Error::new("Could not initialize RocksDB TransactionDB.".to_owned()));
+            return Err(Error::new(
+                "Could not initialize RocksDB TransactionDB.".to_owned(),
+            ));
         }
 
         Ok(Self { inner })
@@ -1110,16 +1092,14 @@ impl InnerTransactionDB {
 
 impl Drop for InnerTransactionDB {
     fn drop(&mut self) {
-        unsafe {
-            ffi::rocksdb_transactiondb_close(self.inner)
-        }
+        unsafe { ffi::rocksdb_transactiondb_close(self.inner) }
     }
 }
 
 pub struct TransactionDB {
     cfs: BTreeMap<String, ColumnFamily>,
     inner: Arc<InnerTransactionDB>,
-    path: PathBuf
+    path: PathBuf,
 }
 
 unsafe impl Send for TransactionDB {} // FIXME is this okay?
@@ -1132,8 +1112,7 @@ impl TransactionDB {
 
     /// Open a transaction database with default options.
     pub fn open_default<P: AsRef<Path>>(path: P) -> Result<Self, Error> {
-        let opts = Options::default()
-            .create_if_missing(true);
+        let opts = Options::default().create_if_missing(true);
         let txndb_opts = TransactionDBOptions::default();
         Self::open(&opts, &txndb_opts, path)
     }
@@ -1142,32 +1121,35 @@ impl TransactionDB {
     pub fn open<P: AsRef<Path>>(
         opts: &Options,
         txndb_opts: &TransactionDBOptions,
-        path: P
+        path: P,
     ) -> Result<Self, Error> {
         let path = path.as_ref();
         let cpath = pathref_to_cstring(path)?;
         if let Err(err) = fs::create_dir_all(&path) {
-            return Err(Error::new(format!("Failed to create RocksDB directory: `{:?}`.", err)));
+            return Err(Error::new(format!(
+                "Failed to create RocksDB directory: `{:?}`.",
+                err
+            )));
         }
 
         Ok(Self {
             inner: Arc::new(InnerTransactionDB::open(&opts, &txndb_opts, &cpath)?),
             cfs: Default::default(), // FIXME not supported in ffi right now...
-            path: path.to_path_buf()
+            path: path.to_path_buf(),
         })
     }
 
     pub fn begin_transaction_opt_full(
         &self,
         writeopts: &WriteOptions,
-        txnopts: &TransactionOptions
+        txnopts: &TransactionOptions,
     ) -> Transaction {
         let txn = unsafe {
             ffi::rocksdb_transaction_begin(
                 self.inner.inner,
                 writeopts.inner,
                 txnopts.inner,
-                ptr::null_mut()
+                ptr::null_mut(),
             )
         };
         if txn.is_null() {
@@ -1176,7 +1158,7 @@ impl TransactionDB {
 
         Transaction {
             inner: txn,
-            db: InnerDbType::TxnDB(self.inner.clone())
+            db: InnerDbType::TxnDB(self.inner.clone()),
         }
     }
 }
@@ -1184,22 +1166,25 @@ impl TransactionDB {
 impl DatabaseMetaOperations for TransactionDB {
     fn drop_cf(&mut self, _cf_name: &str) -> Result<(), Error> {
         unimplemented!() // FIXME not supported in ffi right now...
-        // {
-        //     let cf_handle = self.get_cf_handle(cf_name)?;
-        //     unsafe {
-        //         try_ffi!(ffi::rocksdb_transactiondb_drop_column_family(
-        //             self.inner.inner,
-        //             cf_handle.inner
-        //         ))
-        //     }
-        // }
-        // self.cfs.remove(cf_name);
-        // Ok(())
+                         // {
+                         //     let cf_handle = self.get_cf_handle(cf_name)?;
+                         //     unsafe {
+                         //         try_ffi!(ffi::rocksdb_transactiondb_drop_column_family(
+                         //             self.inner.inner,
+                         //             cf_handle.inner
+                         //         ))
+                         //     }
+                         // }
+                         // self.cfs.remove(cf_name);
+                         // Ok(())
     }
 
     fn create_cf_opt(&mut self, cf_name: &str, opts: &Options) -> Result<&ColumnFamily, Error> {
         if self.cfs.contains_key(cf_name) {
-            return Err(Error::new(format!("Column family \"{}\" already exists", cf_name)));
+            return Err(Error::new(format!(
+                "Column family \"{}\" already exists",
+                cf_name
+            )));
         }
 
         let cf_name_cstring = CString::new(cf_name.as_bytes())?;
@@ -1220,7 +1205,7 @@ impl DatabaseMetaOperations for TransactionDB {
     fn get_cf_handle(&self, cf_name: &str) -> Result<&ColumnFamily, Error> {
         match self.cfs.get(cf_name) {
             Some(cf_handle) => Ok(cf_handle),
-            None => Err(Error::new(format!("No such column family {}", cf_name)))
+            None => Err(Error::new(format!("No such column family {}", cf_name))),
         }
     }
 }
@@ -1231,7 +1216,11 @@ impl DatabaseReadNoOptOperations for TransactionDB {
         self.get_opt(key, &readopts)
     }
 
-    fn get_cf(&self, cf_handle: &ColumnFamily, key: &[u8]) -> Result<Option<DatabaseVector>, Error> {
+    fn get_cf(
+        &self,
+        cf_handle: &ColumnFamily,
+        key: &[u8],
+    ) -> Result<Option<DatabaseVector>, Error> {
         let readopts = ReadOptions::default();
         self.get_cf_opt(cf_handle, key, &readopts)
     }
@@ -1336,12 +1325,7 @@ impl DatabaseWriteOptOperations for TransactionDB {
         Ok(())
     }
 
-    fn merge_opt(
-        &self,
-        key: &[u8],
-        value: &[u8],
-        writeopts: &WriteOptions,
-    ) -> Result<(), Error> {
+    fn merge_opt(&self, key: &[u8], value: &[u8], writeopts: &WriteOptions) -> Result<(), Error> {
         unsafe {
             try_ffi!(ffi::rocksdb_transactiondb_merge(
                 self.inner.inner,

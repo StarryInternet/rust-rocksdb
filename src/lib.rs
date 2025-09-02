@@ -54,20 +54,21 @@ mod ffi_util;
 
 pub mod backup;
 pub mod checkpoint;
-mod comparator;
-pub mod merge_operator;
 pub mod compaction_filter;
+mod comparator;
 mod db;
 mod db_options;
+pub mod merge_operator;
 mod slice_transform;
 
 // FIXME
 pub mod refactor;
 
 pub use compaction_filter::Decision as CompactionDecision;
-pub use db::{DBCompactionStyle, DBCompressionType, DBIterator, DBRawIterator, DBRecoveryMode,
-             DBVector, ReadOptions, Direction, IteratorMode, Snapshot, WriteBatch,
-             new_bloom_filter};
+pub use db::{
+    new_bloom_filter, DBCompactionStyle, DBCompressionType, DBIterator, DBRawIterator,
+    DBRecoveryMode, DBVector, Direction, IteratorMode, ReadOptions, Snapshot, WriteBatch,
+};
 
 pub use slice_transform::SliceTransform;
 
@@ -158,8 +159,14 @@ pub enum BlockBasedIndexType {
 /// See https://github.com/facebook/rocksdb/wiki/MemTable for more information.
 pub enum MemtableFactory {
     Vector,
-    HashSkipList { bucket_count: usize, height: i32, branching_factor: i32 },
-    HashLinkList { bucket_count: usize }
+    HashSkipList {
+        bucket_count: usize,
+        height: i32,
+        branching_factor: i32,
+    },
+    HashLinkList {
+        bucket_count: usize,
+    },
 }
 
 /// Database-wide options around performance and behavior.
@@ -224,7 +231,6 @@ pub struct Options {
 pub struct WriteOptions {
     inner: *mut ffi::rocksdb_writeoptions_t,
 }
-
 
 /// An opaque type used to represent a column family. Returned from some functions, and used
 /// in others

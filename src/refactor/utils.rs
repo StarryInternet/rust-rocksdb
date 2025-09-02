@@ -49,22 +49,19 @@ pub fn c_buf_to_opt_dbvec(value: *mut u8, length: usize) -> Option<DatabaseVecto
     if value.is_null() {
         None
     } else {
-        unsafe {
-            Some(DatabaseVector::from_c(value, length))
-        }
+        unsafe { Some(DatabaseVector::from_c(value, length)) }
     }
 }
 
 pub fn pathref_to_cstring<P>(path: P) -> Result<CString, Error>
-    where P: AsRef<Path>
+where
+    P: AsRef<Path>,
 {
     match CString::new(path.as_ref().to_string_lossy().as_bytes()) {
         Ok(cpath) => Ok(cpath),
-        Err(err) => {
-            Err(Error::new(
-                format!("Failed to convert path to CString: {:?}", err).into()
-            ))
-        }
+        Err(err) => Err(Error::new(
+            format!("Failed to convert path to CString: {:?}", err).into(),
+        )),
     }
 }
 
